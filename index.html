@@ -81,11 +81,43 @@ body::after{
 
 .canvas-wrapper{
     position:relative;
-    width:72vmin;
-    height:72vmin;
+    width:min(78vw,78vh);
+    height:min(78vw,78vh);
     display:flex;
     align-items:center;
     justify-content:center;
+}
+
+.stats-overlay{
+    position:absolute;
+    top:22px;
+    left:22px;
+    display:flex;
+    gap:12px;
+    z-index:20;
+    flex-wrap:wrap;
+}
+
+.stats-overlay div{
+    background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.06);
+    backdrop-filter:blur(10px);
+    border-radius:14px;
+    padding:10px 14px;
+    min-width:90px;
+}
+
+.stats-overlay span{
+    display:block;
+    font-size:0.62rem;
+    letter-spacing:1.5px;
+    color:rgba(255,255,255,0.45);
+    margin-bottom:4px;
+}
+
+.stats-overlay strong{
+    color:#dffcff;
+    font-size:1rem;
 }
 
 .canvas-ring{
@@ -103,23 +135,24 @@ body::after{
     position:absolute;
     bottom:120px;
     left:50%;
-    transform:translateX(-50%);
-    width:360px;
-    padding:22px;
-    border-radius:28px;
-    background:rgba(10,14,28,0.72);
-    backdrop-filter:blur(20px);
+    transform:translateX(-50%) scale(0.95);
+    width:320px;
+    padding:20px;
+    border-radius:24px;
+    background:rgba(8,12,24,0.88);
+    backdrop-filter:blur(18px);
     border:1px solid rgba(255,255,255,0.06);
     opacity:0;
     pointer-events:none;
-    transition:0.35s ease;
+    transition:0.28s ease;
     z-index:30;
 }
 
 .floating-panel.active{
     opacity:1;
     pointer-events:auto;
-    bottom:140px;
+    bottom:130px;
+    transform:translateX(-50%) scale(1);
 }
 
 .panel-section{
@@ -269,16 +302,18 @@ select{
 
 button{
     width:100%;
-    padding:15px;
+    padding:12px;
     border:none;
-    border-radius:16px;
-    background:linear-gradient(135deg,#7c3aed,#06b6d4);
+    border-radius:14px;
+    background:rgba(255,255,255,0.08);
     color:white;
-    font-weight:800;
     cursor:pointer;
-    margin-top:12px;
-    transition:0.25s ease;
-    box-shadow:0 10px 30px rgba(124,58,237,0.25);
+    transition:0.2s ease;
+    font-weight:600;
+}
+
+button:hover{
+    background:rgba(255,255,255,0.14);
 }
 
 button:hover{
@@ -301,8 +336,8 @@ button:hover{
 }
 
 canvas{
-    width:92%;
-    height:92%;
+    width:100%;
+    height:100%;
     border-radius:50%;
     background:#020611;
     box-shadow:
@@ -362,6 +397,14 @@ opacity:0.4;
 <div class="canvas-wrapper">
 <div class="canvas-ring"></div>
 <canvas id="canvas"></canvas>
+
+<div class="stats-overlay">
+<div><span>GEN</span><strong id="generation">0</strong></div>
+<div><span>ALIVE</span><strong id="aliveCount">0</strong></div>
+<div><span>ENTROPY</span><strong id="entropy">0</strong></div>
+<div><span>STATES</span><strong id="uniqueStates">0</strong></div>
+</div>
+
 </div>
 
 <div class="floating-panel" id="floatingPanel">
@@ -436,13 +479,12 @@ function resizeCanvas(){
 
     const wrapper = document.querySelector('.canvas-wrapper');
 
-    canvas.width = wrapper.clientWidth * 0.92;
-    canvas.height = wrapper.clientHeight * 0.92;
+    const sizePx = Math.min(wrapper.clientWidth,wrapper.clientHeight);
 
-    cellSize = Math.min(
-        canvas.width / size,
-        canvas.height / size
-    );
+    canvas.width = sizePx;
+    canvas.height = sizePx;
+
+    cellSize = canvas.width / size;
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -594,6 +636,14 @@ function draw(){
 
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
+    const radius = canvas.width/2;
+
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(radius,radius,radius,0,Math.PI*2);
+    ctx.clip();
+
     for(let y=0;y<size;y++){
 
         for(let x=0;x<size;x++){
@@ -602,13 +652,13 @@ function draw(){
 
                 const neighbors = getNeighbors(x,y);
 
-                const intensity = Math.min(255, neighbors * 35);
+                const glow = Math.min(255,120 + neighbors*18);
 
-                ctx.fillStyle = `rgb(${intensity},255,255)`;
+                ctx.fillStyle = `rgb(120,${glow},255)`;
 
             }else{
 
-                ctx.fillStyle = '#050816';
+                ctx.fillStyle = '#030816';
             }
 
             ctx.fillRect(
@@ -619,6 +669,8 @@ function draw(){
             );
         }
     }
+
+    ctx.restore();
 }
 
 function entropy(){
