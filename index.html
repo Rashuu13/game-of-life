@@ -556,6 +556,325 @@ Extracts bits using:
 * neighborhood parity
 * XOR mixing
 
+# Pattern Search / Anti-Pattern Engine
+
+The system now also includes a parameter-search idea:
+
+* evolve many rule combinations
+* measure entropy stability
+* measure compression resistance
+* measure cycle length
+* measure local correlation
+* reward unpredictable evolution
+
+You can add this experimental function into the script section.
+
+```javascript
+
+let walkers = [];
+
+function expandGridRandomly(){
+
+    const growChance = 0.08;
+
+    if(Math.random() > growChance) return;
+
+    const growX = Math.floor(Math.random()*4)+1;
+    const growY = Math.floor(Math.random()*4)+1;
+
+    const newWidth = size + growX;
+    const newHeight = size + growY;
+
+    let newGrid = [];
+
+    for(let y=0;y<newHeight;y++){
+
+        let row = [];
+
+        for(let x=0;x<newWidth;x++){
+
+            row.push(0);
+        }
+
+        newGrid.push(row);
+    }
+
+    const offsetX = Math.floor(Math.random()*growX);
+    const offsetY = Math.floor(Math.random()*growY);
+
+    for(let y=0;y<size;y++){
+
+        for(let x=0;x<size;x++){
+
+            newGrid[y+offsetY][x+offsetX] = grid[y][x];
+        }
+    }
+
+    for(let i=0;i<(growX*growY*3);i++){
+
+        const rx = Math.floor(Math.random()*newWidth);
+        const ry = Math.floor(Math.random()*newHeight);
+
+        newGrid[ry][rx] = Math.random()>0.5?1:0;
+    }
+
+    size = Math.max(newWidth,newHeight);
+
+    grid = normalizeGrid(newGrid,size);
+
+    resizeCanvas();
+}
+
+function normalizeGrid(g,target){
+
+    let result = [];
+
+    for(let y=0;y<target;y++){
+
+        let row = [];
+
+        for(let x=0;x<target;x++){
+
+            row.push(g[y] && g[y][x] ? 1 : 0);
+        }
+
+        result.push(row);
+    }
+
+    return result;
+}
+
+function initWalkers(count=12){
+
+    walkers = [];
+
+    for(let i=0;i<count;i++){
+
+        walkers.push({
+            x:Math.floor(Math.random()*size),
+            y:Math.floor(Math.random()*size),
+            dx:[-1,0,1][Math.floor(Math.random()*3)],
+            dy:[-1,0,1][Math.floor(Math.random()*3)]
+        });
+    }
+}
+
+function moveWalkers(){
+
+    for(let w of walkers){
+
+        if(Math.random()<0.3){
+
+            w.dx = [-1,0,1][Math.floor(Math.random()*3)];
+            w.dy = [-1,0,1][Math.floor(Math.random()*3)];
+        }
+
+        w.x = (w.x + w.dx + size) % size;
+        w.y = (w.y + w.dy + size) % size;
+
+        grid[w.y][w.x] ^= 1;
+
+        const burst = Math.floor(Math.random()*4)+1;
+
+        for(let i=0;i<burst;i++){
+
+            const nx = (w.x + Math.floor(Math.random()*7)-3 + size) % size;
+            const ny = (w.y + Math.floor(Math.random()*7)-3 + size) % size;
+
+            grid[ny][nx] ^= 1;
+        }
+    }
+}
+
+function compressionEstimate(bits){
+
+    let repeats = 0;
+
+    for(let i=0;i<bits.length-8;i++){
+
+        const chunk = bits.slice(i,i+8);
+
+        if(bits.indexOf(chunk)!==i){
+            repeats++;
+        }
+    }
+
+    return repeats;
+}
+
+function bitAutocorrelation(bits){
+
+    let same = 0;
+
+    for(let i=1;i<bits.length;i++){
+
+        if(bits[i]===bits[i-1]) same++;
+    }
+
+    return same/bits.length;
+}
+
+function extractEntropyBits(length=2048){
+
+    let bits = '';
+
+    for(let i=0;i<length;i++){
+
+        const x = Math.floor(Math.random()*size);
+        const y = Math.floor(Math.random()*size);
+
+        const neighbors = getNeighbors(x,y);
+
+        const local = grid[y][x];
+
+        const walker = walkers[i % walkers.length];
+
+        const walkerBit = grid[walker.y][walker.x];
+
+        const mixed =
+            local ^
+            (neighbors & 1) ^
+            walkerBit ^
+            ((x*y + neighbors) & 1);
+
+        bits += mixed;
+    }
+
+    return bits;
+}
+
+async function searchBestParameters(){
+
+    const results = [];
+
+    for(let t=0;t<250;t++){
+
+        const candidate = {
+            density:Math.random()*0.7+0.15,
+            perturbation:Math.random()*0.12,
+            injectCount:Math.floor(Math.random()*30)+1,
+            walkers:Math.floor(Math.random()*40)+2,
+            rule:['life','chaos','highentropy'][
+                Math.floor(Math.random()*3)
+            ]
+        };
+
+        document.getElementById('density').value = candidate.density;
+        document.getElementById('perturbation').value = candidate.perturbation;
+        document.getElementById('injectCount').value = candidate.injectCount;
+        document.getElementById('ruleType').value = candidate.rule;
+
+        initialize();
+
+        initWalkers(candidate.walkers);
+
+        let localStates = new Set();
+
+        let entropyScores = [];
+
+        let repeated = 0;
+
+        for(let i=0;i<400;i++){
+
+            step();
+
+            moveWalkers();
+
+            expandGridRandomly();
+
+            const bits = extractEntropyBits(1024);
+
+            const H = entropy();
+
+            entropyScores.push(H);
+
+            const hash = lightweightHash(bits);
+
+            if(localStates.has(hash)){
+                repeated++;
+            }
+
+            localStates.add(hash);
+        }
+
+        const avgEntropy =
+            entropyScores.reduce((a,b)=>a+b,0)
+            / entropyScores.length;
+
+        const variancePenalty = variance(entropyScores);
+
+        const sampleBits = extractEntropyBits(4096);
+
+        const compressionPenalty = compressionEstimate(sampleBits);
+
+        const autocorr = bitAutocorrelation(sampleBits);
+
+        const score =
+            avgEntropy*300
+            - repeated*50
+            - variancePenalty*100
+            - compressionPenalty*0.05
+            - Math.abs(autocorr-0.5)*500;
+
+        results.push({
+            ...candidate,
+            score,
+            avgEntropy,
+            repeated,
+            autocorr,
+            compressionPenalty
+        });
+    }
+
+    results.sort((a,b)=>b.score-a.score);
+
+    console.table(results.slice(0,20));
+
+    return results[0];
+}
+
+function lightweightHash(str){
+
+    let h = 2166136261;
+
+    for(let i=0;i<str.length;i++){
+
+        h ^= str.charCodeAt(i);
+
+        h +=
+            (h << 1) +
+            (h << 4) +
+            (h << 7) +
+            (h << 8) +
+            (h << 24);
+    }
+
+    return h >>> 0;
+}
+
+function variance(arr){
+
+    const mean =
+        arr.reduce((a,b)=>a+b,0)/arr.length;
+
+    return arr.reduce((sum,v)=>{
+
+        return sum + (v-mean)*(v-mean);
+
+    },0)/arr.length;
+}
+
+```
+
+# What This Search Tries To Optimize
+
+The scoring engine rewards:
+
+* high entropy
+* stable entropy over time
+* low short-term repetition
+* resistance to fast local cycles
+
 # Important Reality Check
 
 This is NOT cryptographically secure.
