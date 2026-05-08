@@ -47,9 +47,165 @@ body::after{
     filter:blur(50px);
 }
 
-.container{
-    display:flex;
+.app-shell{
+    width:100vw;
     height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    overflow:hidden;
+}
+
+.top-title{
+    position:absolute;
+    top:32px;
+    text-align:center;
+    z-index:20;
+}
+
+.main-title{
+    font-size:2.7rem;
+    font-weight:900;
+    letter-spacing:10px;
+    color:white;
+}
+
+.sub-title{
+    margin-top:6px;
+    color:rgba(255,255,255,0.5);
+    letter-spacing:3px;
+    text-transform:uppercase;
+    font-size:0.75rem;
+}
+
+.canvas-wrapper{
+    position:relative;
+    width:72vmin;
+    height:72vmin;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.canvas-ring{
+    position:absolute;
+    width:100%;
+    height:100%;
+    border-radius:50%;
+    border:1px solid rgba(0,255,255,0.16);
+    box-shadow:
+        0 0 60px rgba(0,255,255,0.08),
+        inset 0 0 60px rgba(0,255,255,0.05);
+}
+
+.floating-panel{
+    position:absolute;
+    bottom:120px;
+    left:50%;
+    transform:translateX(-50%);
+    width:360px;
+    padding:22px;
+    border-radius:28px;
+    background:rgba(10,14,28,0.72);
+    backdrop-filter:blur(20px);
+    border:1px solid rgba(255,255,255,0.06);
+    opacity:0;
+    pointer-events:none;
+    transition:0.35s ease;
+    z-index:30;
+}
+
+.floating-panel.active{
+    opacity:1;
+    pointer-events:auto;
+    bottom:140px;
+}
+
+.panel-section{
+    margin-bottom:16px;
+}
+
+.panel-label{
+    margin-bottom:8px;
+    color:rgba(255,255,255,0.72);
+    font-size:0.88rem;
+}
+
+.panel-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:18px;
+}
+
+.mini-stats{
+    margin-top:18px;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    color:rgba(255,255,255,0.72);
+    font-size:0.85rem;
+}
+
+.fab-menu{
+    position:absolute;
+    bottom:38px;
+    left:50%;
+    transform:translateX(-50%);
+    width:90px;
+    height:90px;
+    z-index:40;
+}
+
+.fab-core{
+    position:absolute;
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:linear-gradient(135deg,#7c3aed,#06b6d4);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:2rem;
+    cursor:pointer;
+    box-shadow:0 10px 40px rgba(0,0,0,0.35);
+}
+
+.fab-action{
+    position:absolute;
+    width:58px;
+    height:58px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.08);
+    backdrop-filter:blur(12px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    border:1px solid rgba(255,255,255,0.08);
+    opacity:0;
+    transition:0.35s ease;
+}
+
+.fab-menu.active .fab-action{
+    opacity:1;
+}
+
+.fab-menu.active .fab-1{
+    transform:translate(-120px,-30px);
+}
+
+.fab-menu.active .fab-2{
+    transform:translate(-40px,-110px);
+}
+
+.fab-menu.active .fab-3{
+    transform:translate(40px,-110px);
+}
+
+.fab-menu.active .fab-4{
+    transform:translate(120px,-30px);
 }
 
 .sidebar{
@@ -145,8 +301,13 @@ button:hover{
 }
 
 canvas{
-    flex:1;
-    background:radial-gradient(circle at center,#07111f,#02050f 70%);
+    width:92%;
+    height:92%;
+    border-radius:50%;
+    background:#020611;
+    box-shadow:
+        inset 0 0 30px rgba(255,255,255,0.03),
+        0 0 80px rgba(0,255,255,0.04);
 }
 
 .stat-value{
@@ -191,92 +352,67 @@ opacity:0.4;
 </head>
 <body>
 
-<div class="container">
+<div class="app-shell">
 
-<div class="sidebar">
-
-<div class="title">Entropy Lab</div>
-
-<div class="subtitle">
-Experimental cellular automata engine for studying:
-<br><br>
-• entropy growth<br>
-• randomness quality<br>
-• diffusion<br>
-• cycle behavior<br>
-• perturbation effects
+<div class="top-title">
+<div class="main-title">ENTROPY LAB</div>
+<div class="sub-title">adaptive cellular automata engine</div>
 </div>
 
-<div class="section">
-<h3>Grid</h3>
+<div class="canvas-wrapper">
+<div class="canvas-ring"></div>
+<canvas id="canvas"></canvas>
+</div>
 
-<label>
-Grid Size
-<input type="number" id="gridSize" value="120" min="20" max="300">
-</label>
+<div class="floating-panel" id="floatingPanel">
 
-<label>
-Initial Alive Density
+<div class="panel-section">
+<div class="panel-label">Entropy</div>
 <input type="range" id="density" min="0" max="1" step="0.01" value="0.35">
-</label>
-
 </div>
 
-<div class="section">
-<h3>Rules</h3>
+<div class="panel-section">
+<div class="panel-label">Perturbation</div>
+<input type="range" id="perturbation" min="0" max="0.2" step="0.001" value="0.01">
+</div>
 
-<label>
-Rule Type
+<div class="panel-section">
+<div class="panel-label">Injection Count</div>
+<input type="number" id="injectCount" value="3" min="0" max="50">
+</div>
+
+<div class="panel-section">
+<div class="panel-label">Rule</div>
 <select id="ruleType">
 <option value="life">Game of Life</option>
 <option value="chaos">Chaos Rule</option>
 <option value="highentropy">High Entropy</option>
 </select>
-</label>
-
-<label>
-Perturbation Chance
-<input type="range" id="perturbation" min="0" max="0.2" step="0.001" value="0.01">
-</label>
-
-<label>
-Injection Count
-<input type="number" id="injectCount" value="3" min="0" max="50">
-</label>
-
 </div>
 
-<div class="section">
-<h3>Controls</h3>
-
+<div class="panel-actions">
 <button onclick="initialize()">Initialize</button>
 <button onclick="toggleSimulation()">Start / Pause</button>
 <button onclick="step()">Single Step</button>
-<button onclick="extractBits()">Extract Random Bits</button>
-
+<button onclick="extractBits()">Extract Bits</button>
 </div>
 
-<div class="stats">
-<div>Generation: <span class="stat-value" id="generation">0</span></div>
-<div>Alive Cells: <span class="stat-value" id="aliveCount">0</span></div>
-<div>Entropy: <span class="stat-value" id="entropy">0</span></div>
-<div>Unique States: <span class="stat-value" id="uniqueStates">0</span></div>
-<div>Cycle Detected: <span class="stat-value" id="cycle">No</span></div>
-<div>Extracted Bits:</div>
-<div class="stat-value" id="bits" style="word-break:break-all"></div>
+<div class="mini-stats">
+<div>Gen <span id="generation">0</span></div>
+<div>Alive <span id="aliveCount">0</span></div>
+<div>Entropy <span id="entropy">0</span></div>
+<div>States <span id="uniqueStates">0</span></div>
 </div>
 
 </div>
 
-<div style="position:relative;flex:1;overflow:hidden;">
-
-<div id="overlayTitle" style="position:absolute;top:22px;left:26px;z-index:10;font-size:1rem;padding:12px 18px;border-radius:18px;background:rgba(255,255,255,0.06);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.08);box-shadow:0 10px 30px rgba(0,0,0,0.35);letter-spacing:1px;color:#c4f1ff;">
-ADAPTIVE ENTROPY FIELD
+<div class="fab-menu" id="fabMenu">
+<div class="fab-action fab-1" onclick="initialize()">↺</div>
+<div class="fab-action fab-2" onclick="toggleSimulation()">▶</div>
+<div class="fab-action fab-3" onclick="step()">⟳</div>
+<div class="fab-action fab-4" onclick="extractBits()">⌁</div>
+<div class="fab-core" onclick="toggleMenu()">≡</div>
 </div>
-
-<div id="pulseOrb" style="position:absolute;top:50%;left:50%;width:500px;height:500px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(0,255,255,0.12),transparent 70%);filter:blur(60px);pointer-events:none;animation:pulse 6s infinite ease-in-out;"></div>
-
-<canvas id="canvas"></canvas>
 
 </div>
 
@@ -298,8 +434,10 @@ let cellSize;
 
 function resizeCanvas(){
 
-    canvas.width = window.innerWidth - 340;
-    canvas.height = window.innerHeight;
+    const wrapper = document.querySelector('.canvas-wrapper');
+
+    canvas.width = wrapper.clientWidth * 0.92;
+    canvas.height = wrapper.clientHeight * 0.92;
 
     cellSize = Math.min(
         canvas.width / size,
@@ -587,6 +725,15 @@ function extractBits(){
     }
 
     document.getElementById('bits').innerText = bits;
+}
+
+function toggleMenu(){
+
+    document.getElementById('fabMenu')
+        .classList.toggle('active');
+
+    document.getElementById('floatingPanel')
+        .classList.toggle('active');
 }
 
 initialize();
