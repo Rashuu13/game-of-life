@@ -1,0 +1,614 @@
+# Cellular Automata Entropy Lab
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Entropy Lab</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    background:#050816;
+    color:white;
+    font-family:Inter,sans-serif;
+    overflow:hidden;
+}
+
+.container{
+    display:flex;
+    height:100vh;
+}
+
+.sidebar{
+    width:340px;
+    background:#0d1328;
+    border-right:1px solid rgba(255,255,255,0.08);
+    padding:24px;
+    overflow-y:auto;
+}
+
+.title{
+    font-size:2rem;
+    font-weight:800;
+    margin-bottom:10px;
+}
+
+.subtitle{
+    color:#a8b3cf;
+    line-height:1.6;
+    margin-bottom:30px;
+}
+
+.section{
+    margin-bottom:28px;
+}
+
+.section h3{
+    margin-bottom:12px;
+    font-size:1rem;
+    color:#8fb8ff;
+}
+
+label{
+    display:block;
+    margin-bottom:10px;
+    font-size:0.95rem;
+    color:#d6def5;
+}
+
+input,
+select{
+    width:100%;
+    padding:12px;
+    border-radius:12px;
+    border:none;
+    background:#111b36;
+    color:white;
+    margin-top:6px;
+}
+
+button{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:14px;
+    background:linear-gradient(135deg,#7c3aed,#06b6d4);
+    color:white;
+    font-weight:700;
+    cursor:pointer;
+    margin-top:10px;
+}
+
+button:hover{
+    opacity:0.9;
+}
+
+.stats{
+    background:#111b36;
+    border-radius:18px;
+    padding:18px;
+    line-height:2;
+    margin-top:18px;
+}
+
+canvas{
+    flex:1;
+    background:#030712;
+}
+
+.stat-value{
+    color:#6ee7ff;
+    font-weight:700;
+}
+
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+
+<div class="title">Entropy Lab</div>
+
+<div class="subtitle">
+Experimental cellular automata engine for studying:
+<br><br>
+• entropy growth<br>
+• randomness quality<br>
+• diffusion<br>
+• cycle behavior<br>
+• perturbation effects
+</div>
+
+<div class="section">
+<h3>Grid</h3>
+
+<label>
+Grid Size
+<input type="number" id="gridSize" value="120" min="20" max="300">
+</label>
+
+<label>
+Initial Alive Density
+<input type="range" id="density" min="0" max="1" step="0.01" value="0.35">
+</label>
+
+</div>
+
+<div class="section">
+<h3>Rules</h3>
+
+<label>
+Rule Type
+<select id="ruleType">
+<option value="life">Game of Life</option>
+<option value="chaos">Chaos Rule</option>
+<option value="highentropy">High Entropy</option>
+</select>
+</label>
+
+<label>
+Perturbation Chance
+<input type="range" id="perturbation" min="0" max="0.2" step="0.001" value="0.01">
+</label>
+
+<label>
+Injection Count
+<input type="number" id="injectCount" value="3" min="0" max="50">
+</label>
+
+</div>
+
+<div class="section">
+<h3>Controls</h3>
+
+<button onclick="initialize()">Initialize</button>
+<button onclick="toggleSimulation()">Start / Pause</button>
+<button onclick="step()">Single Step</button>
+<button onclick="extractBits()">Extract Random Bits</button>
+
+</div>
+
+<div class="stats">
+<div>Generation: <span class="stat-value" id="generation">0</span></div>
+<div>Alive Cells: <span class="stat-value" id="aliveCount">0</span></div>
+<div>Entropy: <span class="stat-value" id="entropy">0</span></div>
+<div>Unique States: <span class="stat-value" id="uniqueStates">0</span></div>
+<div>Cycle Detected: <span class="stat-value" id="cycle">No</span></div>
+<div>Extracted Bits:</div>
+<div class="stat-value" id="bits" style="word-break:break-all"></div>
+</div>
+
+</div>
+
+<canvas id="canvas"></canvas>
+
+</div>
+
+<script>
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let grid = [];
+let running = false;
+let generation = 0;
+let animation;
+let stateHistory = new Set();
+
+let size = 120;
+let cellSize;
+
+function resizeCanvas(){
+
+    canvas.width = window.innerWidth - 340;
+    canvas.height = window.innerHeight;
+
+    cellSize = Math.min(
+        canvas.width / size,
+        canvas.height / size
+    );
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+function createGrid(size, density){
+
+    let g = [];
+
+    for(let y=0;y<size;y++){
+
+        let row = [];
+
+        for(let x=0;x<size;x++){
+
+            row.push(Math.random() < density ? 1 : 0);
+
+        }
+
+        g.push(row);
+    }
+
+    return g;
+}
+
+function initialize(){
+
+    size = parseInt(document.getElementById('gridSize').value);
+
+    const density = parseFloat(document.getElementById('density').value);
+
+    grid = createGrid(size,density);
+
+    generation = 0;
+
+    stateHistory.clear();
+
+    resizeCanvas();
+
+    draw();
+
+    updateStats();
+}
+
+function getNeighbors(x,y){
+
+    let count = 0;
+
+    for(let dy=-1;dy<=1;dy++){
+
+        for(let dx=-1;dx<=1;dx++){
+
+            if(dx===0 && dy===0) continue;
+
+            const nx = (x + dx + size) % size;
+            const ny = (y + dy + size) % size;
+
+            count += grid[ny][nx];
+        }
+    }
+
+    return count;
+}
+
+function nextState(current, neighbors, rule){
+
+    if(rule === 'life'){
+
+        if(current === 1){
+            return (neighbors === 2 || neighbors === 3) ? 1 : 0;
+        }else{
+            return neighbors === 3 ? 1 : 0;
+        }
+    }
+
+    if(rule === 'chaos'){
+
+        if(current === 1){
+            return (neighbors === 2 || neighbors === 3 || neighbors === 5) ? 1 : 0;
+        }else{
+            return (neighbors === 3 || neighbors === 6) ? 1 : 0;
+        }
+    }
+
+    if(rule === 'highentropy'){
+
+        if(current === 1){
+            return (neighbors === 1 || neighbors === 2 || neighbors === 5) ? 1 : 0;
+        }else{
+            return (neighbors === 3 || neighbors === 4 || neighbors === 7) ? 1 : 0;
+        }
+    }
+
+    return 0;
+}
+
+function injectPerturbations(newGrid){
+
+    const perturbation = parseFloat(document.getElementById('perturbation').value);
+    const injectCount = parseInt(document.getElementById('injectCount').value);
+
+    for(let i=0;i<injectCount;i++){
+
+        if(Math.random() < perturbation){
+
+            const x = Math.floor(Math.random()*size);
+            const y = Math.floor(Math.random()*size);
+
+            newGrid[y][x] = 1 - newGrid[y][x];
+        }
+    }
+}
+
+function step(){
+
+    const rule = document.getElementById('ruleType').value;
+
+    let newGrid = [];
+
+    for(let y=0;y<size;y++){
+
+        let row = [];
+
+        for(let x=0;x<size;x++){
+
+            const neighbors = getNeighbors(x,y);
+
+            row.push(
+                nextState(grid[y][x], neighbors, rule)
+            );
+        }
+
+        newGrid.push(row);
+    }
+
+    injectPerturbations(newGrid);
+
+    grid = newGrid;
+
+    generation++;
+
+    detectCycles();
+
+    draw();
+
+    updateStats();
+}
+
+function draw(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    for(let y=0;y<size;y++){
+
+        for(let x=0;x<size;x++){
+
+            if(grid[y][x]){
+
+                const neighbors = getNeighbors(x,y);
+
+                const intensity = Math.min(255, neighbors * 35);
+
+                ctx.fillStyle = `rgb(${intensity},255,255)`;
+
+            }else{
+
+                ctx.fillStyle = '#050816';
+            }
+
+            ctx.fillRect(
+                x*cellSize,
+                y*cellSize,
+                cellSize,
+                cellSize
+            );
+        }
+    }
+}
+
+function entropy(){
+
+    let ones = 0;
+    let zeros = 0;
+
+    for(let row of grid){
+
+        for(let cell of row){
+
+            if(cell) ones++;
+            else zeros++;
+        }
+    }
+
+    const total = ones + zeros;
+
+    const p1 = ones/total;
+    const p0 = zeros/total;
+
+    let H = 0;
+
+    if(p1 > 0) H -= p1 * Math.log2(p1);
+    if(p0 > 0) H -= p0 * Math.log2(p0);
+
+    return H;
+}
+
+function serializeGrid(){
+
+    return grid.flat().join('');
+}
+
+function detectCycles(){
+
+    const state = serializeGrid();
+
+    if(stateHistory.has(state)){
+
+        document.getElementById('cycle').innerText = 'YES';
+
+    }else{
+
+        stateHistory.add(state);
+    }
+}
+
+function updateStats(){
+
+    let alive = 0;
+
+    for(let row of grid){
+
+        for(let cell of row){
+
+            alive += cell;
+        }
+    }
+
+    document.getElementById('generation').innerText = generation;
+    document.getElementById('aliveCount').innerText = alive;
+    document.getElementById('entropy').innerText = entropy().toFixed(5);
+    document.getElementById('uniqueStates').innerText = stateHistory.size;
+}
+
+function toggleSimulation(){
+
+    running = !running;
+
+    if(running){
+
+        animate();
+
+    }else{
+
+        cancelAnimationFrame(animation);
+    }
+}
+
+function animate(){
+
+    if(!running) return;
+
+    step();
+
+    animation = requestAnimationFrame(animate);
+}
+
+function extractBits(){
+
+    let bits = '';
+
+    for(let i=0;i<256;i++){
+
+        const x = Math.floor(Math.random()*size);
+        const y = Math.floor(Math.random()*size);
+
+        const neighbors = getNeighbors(x,y);
+
+        const bit = grid[y][x] ^ (neighbors % 2);
+
+        bits += bit;
+    }
+
+    document.getElementById('bits').innerText = bits;
+}
+
+initialize();
+
+</script>
+
+</body>
+</html>
+```
+
+# What This Does
+
+This is an experimental entropy engine for studying:
+
+* cellular automata dynamics
+* randomness generation
+* entropy diffusion
+* cycle formation
+* perturbation effects
+* controlled chaotic systems
+
+# Included Features
+
+## 1. 2D Evolving Grid
+
+* configurable grid size
+* alive/dead binary states
+
+## 2. Configurable Rules
+
+Three rule systems included:
+
+* Game of Life
+* Chaos Rule
+* High Entropy Rule
+
+## 3. Perturbation Injection
+
+Random bit flips prevent stable attractors.
+
+## 4. Entropy Measurement
+
+Uses Shannon entropy approximation.
+
+## 5. Cycle Detection
+
+Tracks repeated global states.
+
+## 6. Random Bit Extraction
+
+Extracts bits using:
+
+* cell state
+* neighborhood parity
+* XOR mixing
+
+# Important Reality Check
+
+This is NOT cryptographically secure.
+
+It is:
+
+* a research sandbox
+* entropy experiment
+* automata exploration engine
+* diffusion playground
+
+A secure cryptographic RNG would require:
+
+* formal unpredictability proofs
+* resistance to state reconstruction
+* cryptanalysis
+* statistical certification
+* secure entropy sources
+
+# Best Experiments To Try
+
+## Test 1
+
+Increase perturbation rate.
+Observe:
+
+* entropy
+* cycle frequency
+
+## Test 2
+
+Compare rules.
+Which maintains highest entropy longest?
+
+## Test 3
+
+Use very large grids.
+Study cycle lengths.
+
+## Test 4
+
+Modify extraction function.
+Try:
+
+* XOR
+* neighborhood sums
+* diagonal extraction
+* hash mixing
+
+## Test 5
+
+Add nonlocal interactions.
+Example:
+randomly connect distant cells.
+
+That creates much stronger diffusion behavior.
